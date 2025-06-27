@@ -18,6 +18,8 @@ import {
 	setupNginxLoadBalancer,
 	setupPostgres,
 	setupRedis,
+	setupPlaywrightMCP,
+	setupOllama,
 } from './n8n-test-container-dependencies';
 
 // --- Constants ---
@@ -55,6 +57,12 @@ const N8N_WAIT_STRATEGY = Wait.forAll([
 
 export interface N8NConfig {
 	postgres?: boolean;
+	playwrightMCP?: boolean;
+	ollama?:
+		| boolean
+		| {
+				model?: string;
+		  };
 	queueMode?:
 		| boolean
 		| {
@@ -93,7 +101,13 @@ export interface N8NStack {
  * });
  */
 export async function createN8NStack(config: N8NConfig = {}): Promise<N8NStack> {
-	const { postgres = false, queueMode = false, env = {} } = config;
+	const {
+		postgres = false,
+		playwrightMCP = false,
+		ollama = false,
+		queueMode = false,
+		env = {},
+	} = config;
 	const queueConfig = normalizeQueueConfig(queueMode);
 	const usePostgres = postgres || !!queueConfig;
 	const uniqueProjectName = `n8n-${Math.random().toString(36).substring(7)}`;
@@ -103,7 +117,7 @@ export async function createN8NStack(config: N8NConfig = {}): Promise<N8NStack> 
 
 	let environment: Record<string, string> = { ...BASE_ENV, ...env };
 
-	if (usePostgres || queueConfig) {
+	if (usePostgres || queueConfig || playwrightMCP || ollama) {
 		network = await new Network().start();
 	}
 
@@ -178,6 +192,26 @@ export async function createN8NStack(config: N8NConfig = {}): Promise<N8NStack> 
 		baseUrl = `http://localhost:${instances[0].getMappedPort(5678)}`;
 	}
 
+	if (playwrightMCP) {
+		const playwrightMCPContainer = await setupPlaywrightMCP({
+			projectName: uniqueProjectName,
+			network: network!,
+		});
+		containers.push(playwrightMCPContainer);
+	}
+
+	// Setup Ollama if requested
+	if (ollama && network) {
+		const ollamaConfig = typeof ollama === 'boolean' ? { model: 'qwen2.5:latest' } : ollama;
+
+		const ollamaContainer = await setupOllama({
+			projectName: uniqueProjectName,
+			network,
+			model: ollamaConfig.model,
+		});
+
+		containers.push(ollamaContainer);
+	}
 	return {
 		baseUrl,
 		stop: async () => {

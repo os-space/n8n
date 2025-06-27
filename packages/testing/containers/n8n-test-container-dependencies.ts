@@ -184,6 +184,83 @@ function buildNginxConfig(upstreamServers: string): string {
   }`;
 }
 
+export async function setupPlaywrightMCP({
+	projectName,
+	network,
+	headless = true,
+}: {
+	projectName: string;
+	network: StartedNetwork;
+	headless?: boolean;
+}): Promise<StartedTestContainer> {
+	const args = ['--port', '8931'];
+	if (headless) {
+		args.push('--headless');
+	}
+
+	return await new GenericContainer('mcr.microsoft.com/playwright/mcp')
+		.withNetwork(network)
+		.withNetworkAliases('playwright-mcp')
+		.withExposedPorts(8931)
+		.withCommand(args)
+		.withWaitStrategy(Wait.forHttp('/sse', 8931).forStatusCode(200).withStartupTimeout(60000))
+		.withLabels({
+			'com.docker.compose.project': projectName,
+			'com.docker.compose.service': 'playwright-mcp',
+		})
+		.withName(`${projectName}-playwright-mcp`)
+		.withReuse()
+		.start();
+}
+
+export async function setupOllama({
+	projectName,
+	network,
+	model = 'qwen2.5:latest',
+}: {
+	projectName: string;
+	network: StartedNetwork;
+	model?: string;
+}): Promise<StartedTestContainer> {
+	// Start the Ollama server
+	const ollamaContainer = await new GenericContainer('ollama/ollama:latest')
+		.withNetwork(network)
+		.withNetworkAliases('ollama')
+		.withExposedPorts(11434)
+		.withEnvironment({
+			OLLAMA_HOST: '0.0.0.0',
+		})
+		.withWaitStrategy(Wait.forHttp('/api/tags', 11434).forStatusCode(200).withStartupTimeout(60000))
+		.withLabels({
+			'com.docker.compose.project': projectName,
+			'com.docker.compose.service': 'ollama',
+		})
+		.withName(`${projectName}-ollama`)
+		.withReuse()
+		.start();
+
+	// Pull the model after container is running
+	console.log(`Pulling model ${model}... This may take a few minutes on first run.`);
+
+	try {
+		// Execute ollama pull command inside the container
+		const { output, exitCode } = await ollamaContainer.exec(['ollama', 'pull', model]);
+
+		if (exitCode !== 0) {
+			console.warn(`Failed to pull model ${model}: ${output}`);
+		} else {
+			console.log(`Successfully pulled model ${model}`);
+		}
+
+		// Give it a moment to fully load
+		await new Promise((resolve) => setTimeout(resolve, 2000));
+	} catch (error) {
+		console.warn(`Error pulling model ${model}:`, error);
+		// Continue anyway - the model might already be cached if using reuse
+	}
+
+	return ollamaContainer;
+}
 // TODO: Look at Ollama container?
 // TODO: Look at MariaDB container?
 // TODO: Look at MockServer container, could we use this for mocking out external services?

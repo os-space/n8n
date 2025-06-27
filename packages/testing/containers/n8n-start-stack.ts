@@ -75,6 +75,8 @@ async function main() {
 		options: {
 			help: { type: 'boolean', short: 'h' },
 			postgres: { type: 'boolean' },
+			playwrightMCP: { type: 'boolean' },
+			ollama: { type: 'boolean' },
 			queue: { type: 'boolean' },
 			mains: { type: 'string' },
 			workers: { type: 'string' },
@@ -93,6 +95,8 @@ async function main() {
 	// Build configuration
 	const config: any = {
 		postgres: values.postgres ?? false,
+		playwrightMCP: values.playwrightMCP ?? false,
+		ollama: values.ollama ?? false,
 		projectName: values.name,
 	};
 
