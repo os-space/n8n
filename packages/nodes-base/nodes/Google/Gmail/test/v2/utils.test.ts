@@ -2,12 +2,7 @@ import { mock } from 'jest-mock-extended';
 import { DateTime } from 'luxon';
 import type { IExecuteFunctions, INode } from 'n8n-workflow';
 
-import type { IEmail } from '@utils/sendAndWait/interfaces';
-
-import * as GenericFunctions from '../../GenericFunctions';
 import { parseRawEmail, prepareTimestamp } from '../../GenericFunctions';
-import { addThreadHeadersToEmail } from '../../v2/utils/draft';
-import * as draftUtils from '../../v2/utils/draft';
 
 const node: INode = {
 	id: '1',

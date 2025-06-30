@@ -13,7 +13,6 @@ import { labelFields, labelOperations } from './LabelDescription';
 import { getGmailAliases, getLabels, getThreadMessages } from './loadOptions';
 import { messageFields, messageOperations } from './MessageDescription';
 import { threadFields, threadOperations } from './ThreadDescription';
-import { addThreadHeadersToEmail, handleDraftThreadHeaders } from './utils/draft';
 import { configureWaitTillDate } from '../../../../utils/sendAndWait/configureWaitTillDate.util';
 import { sendAndWaitWebhooksDescription } from '../../../../utils/sendAndWait/descriptions';
 import type { IEmail } from '../../../../utils/sendAndWait/interfaces';
