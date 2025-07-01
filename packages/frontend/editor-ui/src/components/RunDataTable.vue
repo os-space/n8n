@@ -7,7 +7,7 @@ import { getMappedExpression } from '@/utils/mappingUtils';
 import { getPairedItemId } from '@/utils/pairedItemUtils';
 import { shorten } from '@/utils/typesUtils';
 import type { GenericValue, IDataObject, INodeExecutionData } from 'n8n-workflow';
-import { computed, onMounted, ref, watch } from 'vue';
+import { useTemplateRef, computed, onMounted, ref, watch } from 'vue';
 import Draggable from '@/components/Draggable.vue';
 import MappingPill from './MappingPill.vue';
 import TextWithHighlights from './TextWithHighlights.vue';
@@ -55,6 +55,9 @@ const emit = defineEmits<{
 }>();
 
 const externalHooks = useExternalHooks();
+
+const tableRef = useTemplateRef('tableRef');
+
 const activeColumn = ref(-1);
 const forceShowGrip = ref(false);
 const draggedColumn = ref(false);
@@ -64,6 +67,7 @@ const activeRow = ref<number | null>(null);
 const columnLimit = ref(MAX_COLUMNS_LIMIT);
 const columnLimitExceeded = ref(false);
 const draggableRef = ref<DraggableRef>();
+const columnCollapsing = ref<{ columnIndex: number; columnWidths: number[] } | undefined>();
 
 const ndvStore = useNDVStore();
 const workflowsStore = useWorkflowsStore();
@@ -419,6 +423,22 @@ function switchToJsonView() {
 	emit('displayModeChange', 'json');
 }
 
+function handleCollapseColumn(columnIndex: number) {
+	if (columnCollapsing.value?.columnIndex === columnIndex || tableRef.value === null) {
+		columnCollapsing.value = undefined;
+		return;
+	}
+
+	columnCollapsing.value = {
+		columnIndex,
+		columnWidths: [...tableRef.value.querySelectorAll('thead tr th')].map((el) =>
+			el instanceof HTMLElement
+				? el.getBoundingClientRect().width // using getBoundingClientRect for decimal accuracy
+				: 0,
+		),
+	};
+}
+
 watch(focusedMappableInput, (curr) => {
 	setTimeout(
 		() => {
@@ -427,6 +447,14 @@ watch(focusedMappableInput, (curr) => {
 		curr ? 300 : 150,
 	);
 });
+
+// Reset column collapsing when column definitions changed
+watch(
+	() => tableData.value.columns.join('|'),
+	() => {
+		columnCollapsing.value = undefined;
+	},
+);
 </script>
 
 <template>
@@ -500,13 +528,27 @@ watch(focusedMappableInput, (curr) => {
 				</tr>
 			</tbody>
 		</table>
-		<table v-else :class="$style.table">
+		<table
+			v-else
+			ref="tableRef"
+			:class="{
+				[$style.table]: true,
+				[$style.hasCollapsingColumn]: columnCollapsing !== undefined,
+			}"
+		>
+			<colgroup v-if="columnCollapsing">
+				<col v-for="(width, i) in columnCollapsing.columnWidths" :key="i" :width="width" />
+			</colgroup>
 			<thead>
 				<tr>
 					<th v-if="tableData.metadata.hasExecutionIds" :class="$style.executionLinkRowHeader">
 						<!-- column for execution link -->
 					</th>
-					<th v-for="(column, i) in tableData.columns || []" :key="column">
+					<th
+						v-for="(column, i) in tableData.columns || []"
+						:key="column"
+						:class="columnCollapsing?.columnIndex === i ? $style.isCollapsingColumn : ''"
+					>
 						<N8nTooltip placement="bottom-start" :disabled="!mappingEnabled" :show-after="1000">
 							<template #content>
 								<div>
@@ -543,6 +585,24 @@ watch(focusedMappableInput, (curr) => {
 										<div :class="$style.dragButton">
 											<n8n-icon icon="grip-vertical" />
 										</div>
+										<N8nTooltip
+											:content="i18n.baseText('dataMapping.tableView.columnCollapsing.tooltip')"
+											:disabled="columnCollapsing?.columnIndex === i"
+										>
+											<N8nIconButton
+												:class="$style.collapseColumnButton"
+												type="tertiary"
+												size="xmini"
+												text
+												:icon="
+													i === columnCollapsing?.columnIndex
+														? 'chevrons-up-down'
+														: 'chevrons-down-up'
+												"
+												:aria-label="i18n.baseText('dataMapping.tableView.columnCollapsing')"
+												@click="handleCollapseColumn(i)"
+											/>
+										</N8nTooltip>
 									</div>
 								</template>
 							</Draggable>
@@ -629,7 +689,10 @@ watch(focusedMappableInput, (curr) => {
 						:key="index2"
 						:data-row="index1"
 						:data-col="index2"
-						:class="hasJsonInColumn(index2) ? $style.minColWidth : $style.limitColWidth"
+						:class="[
+							hasJsonInColumn(index2) ? $style.minColWidth : $style.limitColWidth,
+							columnCollapsing?.columnIndex === index2 ? $style.isCollapsingColumn : '',
+						]"
 						@mouseenter="onMouseEnterCell"
 						@mouseleave="onMouseLeaveCell"
 					>
@@ -756,6 +819,21 @@ watch(focusedMappableInput, (curr) => {
 	th:last-child,
 	td:last-child {
 		border-right: var(--border-base);
+	}
+
+	&.hasCollapsingColumn {
+		table-layout: fixed;
+
+		td:not(.isCollapsingColumn) {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+
+			& :global(.n8n-tree) {
+				height: 1.5em;
+				overflow: hidden;
+			}
+		}
 	}
 }
 
@@ -884,5 +962,19 @@ watch(focusedMappableInput, (curr) => {
 
 .executionLinkRowHeader {
 	width: var(--spacing-m);
+}
+
+.collapseColumnButton {
+	span {
+		flex-shrink: 0;
+	}
+
+	visibility: hidden;
+	margin-block: calc(-2 * var(--spacing-2xs));
+
+	.isCollapsingColumn &,
+	th:hover & {
+		visibility: visible;
+	}
 }
 </style>

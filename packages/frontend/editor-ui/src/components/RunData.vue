@@ -1396,6 +1396,8 @@ defineExpose({ enterEditMode });
 		<div :class="$style.header">
 			<div :class="$style.title">
 				<slot name="header"></slot>
+				{{ ' ' }}
+				<N8nButton icon="x" size="xmini" type="tertiary">Reset Collapsing</N8nButton>
 			</div>
 
 			<div

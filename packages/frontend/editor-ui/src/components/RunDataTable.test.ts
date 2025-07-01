@@ -1,7 +1,7 @@
 import { createComponentRenderer } from '@/__tests__/render';
 import RunDataTable from '@/components/RunDataTable.vue';
 import { createTestingPinia } from '@pinia/testing';
-import { cleanup } from '@testing-library/vue';
+import { cleanup, fireEvent, within } from '@testing-library/vue';
 
 vi.mock('vue-router', () => {
 	const push = vi.fn();
@@ -105,6 +105,51 @@ describe('RunDataTable.vue', () => {
 		// Also, all values from the input data should be rendered
 		Object.values(inputData.json).forEach((value) => {
 			expect(getAllByText(value)).not.toHaveLength(0);
+		});
+	});
+
+	describe('column collapsing', () => {
+		it('should toggle collapsing rows by clicking icon button in column header', async () => {
+			const rendered = renderComponent({
+				props: {
+					inputData: [{ json: { firstName: 'John', lastName: 'Doe' } }],
+				},
+			});
+			const header = within(rendered.getAllByRole('columnheader')[0]);
+
+			expect(rendered.container.querySelectorAll('col')).toHaveLength(0);
+			expect(rendered.getByRole('table')).not.toHaveClass('hasCollapsingColumn');
+
+			await fireEvent.click(header.getByLabelText('Collapse rows'));
+
+			expect(rendered.container.querySelectorAll('col')).toHaveLength(3); // two data columns + right margin column
+			expect(rendered.getByRole('table')).toHaveClass('hasCollapsingColumn');
+
+			await fireEvent.click(header.getByLabelText('Collapse rows'));
+
+			expect(rendered.container.querySelectorAll('col')).toHaveLength(0);
+			expect(rendered.getByRole('table')).not.toHaveClass('hasCollapsingColumn');
+		});
+
+		it('should reset column collapsing when column definitions are changed', async () => {
+			const rendered = renderComponent({
+				props: {
+					inputData: [{ json: { firstName: 'John', lastName: 'Doe' } }],
+				},
+			});
+			const header = within(rendered.getAllByRole('columnheader')[0]);
+
+			expect(rendered.getByRole('table')).not.toHaveClass('hasCollapsingColumn');
+
+			await fireEvent.click(header.getByLabelText('Collapse rows'));
+
+			expect(rendered.getByRole('table')).toHaveClass('hasCollapsingColumn');
+
+			await rendered.rerender({
+				inputData: [{ json: { firstName: 'John', lastName: 'Doe', middleName: 'Q' } }],
+			});
+
+			expect(rendered.getByRole('table')).not.toHaveClass('hasCollapsingColumn');
 		});
 	});
 });
